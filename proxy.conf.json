@@ -1,0 +1,11 @@
+{
+  "/ollama": {
+    "target": "http://localhost:11434",
+    "secure": false,
+    "pathRewrite": {
+      "^/ollama": ""
+    },
+    "changeOrigin": true,
+    "logLevel": "debug"
+  }
+}

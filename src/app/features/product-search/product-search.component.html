@@ -1,0 +1,48 @@
+<div class="page">
+  <h1>Natural Language Product Search</h1>
+  <p class="subtitle">
+    Try: "show me electronics under $50 that are in stock" or "apparel over $100"
+  </p>
+
+  <div class="search-bar">
+    <input
+      [(ngModel)]="queryText"
+      (keydown.enter)="search()"
+      placeholder="Type a search in plain English…"
+      [disabled]="loading()"
+    />
+    <button (click)="search()" [disabled]="loading()">
+      {{ loading() ? 'Searching…' : 'Search' }}
+    </button>
+    <button class="secondary" (click)="reset()" [disabled]="loading()">Reset</button>
+  </div>
+
+  @if (error()) {
+    <p class="error">{{ error() }}</p>
+  }
+
+  @if (lastFilter()) {
+    <details class="parsed-filter">
+      <summary>Parsed filter (what the model returned)</summary>
+      <pre>{{ lastFilter() | json }}</pre>
+    </details>
+  }
+
+  <p class="result-count">{{ results().length }} result(s)</p>
+
+  <ul class="results">
+    @for (product of results(); track product.id) {
+      <li>
+        <div class="product-name">{{ product.name }}</div>
+        <div class="product-meta">
+          <span class="price">${{ product.price.toFixed(2) }}</span>
+          <span class="category">{{ product.category }}</span>
+          @if (!product.inStock) {
+            <span class="out-of-stock">Out of stock</span>
+          }
+        </div>
+        <div class="product-description">{{ product.description }}</div>
+      </li>
+    }
+  </ul>
+</div>
