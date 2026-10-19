@@ -1,12 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { catchError, of, tap } from 'rxjs';
+import { catchError, of, switchMap, tap } from 'rxjs';
 
 import { QueryParserService } from '../../core/services/query-parser.service';
 import { ProductFilterService } from '../../core/services/product-filter.service';
 import { Product } from '../../core/models/product.model';
-import { SearchFilter } from '../../core/models/search-filter.model';
+import { HardConstraints } from '../../core/models/hard-constraints.model';
 import { PRODUCT_CATALOG } from '../../core/data/product-catalog';
 
 @Component({
@@ -23,7 +23,8 @@ export class ProductSearchComponent {
   queryText = '';
   loading = signal(false);
   error = signal<string | null>(null);
-  lastFilter = signal<SearchFilter | null>(null);
+  lastConstraints = signal<HardConstraints | null>(null);
+  lastMatchingIds = signal<string[] | null>(null);
   results = signal<Product[]>(PRODUCT_CATALOG);
 
   search(): void {
@@ -32,11 +33,16 @@ export class ProductSearchComponent {
     this.loading.set(true);
     this.error.set(null);
 
-    this.queryParser.parseQuery(this.queryText).pipe(
-      tap(filter => {
-        this.lastFilter.set(filter);
-        const filtered = this.productFilter.apply(PRODUCT_CATALOG, filter);
-        this.results.set(filtered);
+    this.queryParser.parseHardConstraints(this.queryText).pipe(
+      tap(constraints => this.lastConstraints.set(constraints)),
+      switchMap(constraints => {
+        const candidates = this.productFilter.applyHardConstraints(PRODUCT_CATALOG, constraints);
+        return this.queryParser.findSemanticMatches(this.queryText, candidates).pipe(
+          tap(matchingIds => {
+            this.lastMatchingIds.set(matchingIds);
+            this.results.set(this.productFilter.selectByIds(candidates, matchingIds));
+          })
+        );
       }),
       catchError(() => {
         this.error.set(
@@ -51,7 +57,8 @@ export class ProductSearchComponent {
 
   reset(): void {
     this.queryText = '';
-    this.lastFilter.set(null);
+    this.lastConstraints.set(null);
+    this.lastMatchingIds.set(null);
     this.error.set(null);
     this.results.set(PRODUCT_CATALOG);
   }

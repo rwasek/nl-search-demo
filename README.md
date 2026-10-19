@@ -1,92 +1,81 @@
-# Natural Language Search Demo
+# Natural Language Product Search (Angular + Ollama)
 
-A minimal Angular app that proves out the "AI at runtime" pattern: a plain-English
-search bar is parsed by a local LLM into a structured filter object, which then
-filters an in-memory product catalog. No database, no external API key required.
+A small Angular app that shows how to use a language model at runtime to turn a
+plain-English search into results. No database and no API key: a local model
+(via Ollama) runs on your machine and the catalog is an in-memory array.
 
 ## How it works
 
 ```
-User types a query
-  → QueryParserService sends it to a local Ollama model
-  → Model returns a strict JSON SearchFilter
-  → ProductFilterService applies that filter to PRODUCT_CATALOG (plain array)
-  → Results render in the UI
+User types: "workout gear under $80"
+  Stage 1: model extracts price/stock constraints  -> { maxPrice: 80 }
+           plain code applies them                 -> 15 candidates
+  Stage 2: model gives a verdict for EVERY candidate
+           (short reason, then fits: true/false)   -> running shoes, yoga mat,
+                                                      resistance bands, water bottle
 ```
 
-The AI boundary (`QueryParserService`) and the filtering logic (`ProductFilterService`)
-are deliberately separate. Only the first one talks to a model; the second is a pure
-function over data you can unit test without mocking anything AI-related.
+Design decisions worth knowing:
+
+- **Numbers are filtered in code, not by the model.** Early versions let the model
+  decide whether a $45 item was "under $40", and it got it wrong. The model now only
+  extracts the constraint; plain code does the comparison.
+- **The model judges meaning, not keywords.** "Something to listen to music with"
+  matches earbuds even though those words aren't in the product text.
+- **One verdict per candidate.** Asking a small model to pick a subset from a list
+  let it silently skip items. Requiring a verdict for every candidate fixed that.
+- **Category is not pre-filtered.** "Workout gear" can mean equipment, apparel, or
+  both, so a rigid category enum excluded correct answers.
 
 ## Prerequisites
 
 - Node.js 20+
-- [Ollama](https://ollama.com) installed locally
+- [Ollama](https://ollama.com/download), installed and running
 
 ## Setup
 
-**1. Install dependencies**
-
 ```bash
 npm install
-```
-
-**2. Install and start Ollama, then pull a model**
-
-```bash
-ollama pull llama3.2
-```
-
-Ollama runs its own background service after installation. Confirm it's up:
-
-```bash
-curl http://localhost:11434
-# should return "Ollama is running"
-```
-
-**3. Start the Angular dev server**
-
-```bash
+ollama pull qwen2.5:7b
 npm start
 ```
 
-This runs `ng serve --proxy-config proxy.conf.json`, which proxies requests from
-`/ollama/*` to `http://localhost:11434/*` so the browser never has to make a
-cross-origin request directly to Ollama.
+Open http://localhost:4200.
 
-**4. Open the app**
+`npm start` runs `ng serve` with `proxy.conf.json`, which forwards `/ollama/*` to
+`http://localhost:11434`. Use `npm start`, not `ng serve` directly, or the proxy
+won't load.
 
-Visit `http://localhost:4200`. Try queries like:
+## Try these
 
-- "show me electronics under $50 that are in stock"
-- "apparel over $100"
-- "cheap fitness gear"
-- "toys that are out of stock"
+- "workout gear under $80"
+- "something to listen to music with"
+- "show me earbuds under $40"
+- "electronics above $70"
 
-Expand the "Parsed filter" panel under the search bar to see exactly what JSON
-the model returned for your query — useful for debugging prompt behavior.
+The two panels under the search bar show what each stage returned, which is
+useful for debugging prompts.
 
-## Swapping in the Anthropic API later
+## Known limitation
 
-Once you have an Anthropic API key, replace the body of `QueryParserService.parseQuery()`
-in `src/app/core/services/query-parser.service.ts`:
+A 7B local model misses some inferences. "Gear for a cold morning workout" should
+surface the winter jacket, but this model doesn't reliably make the
+cold-weather-to-jacket connection. Larger hosted models are likely to handle this
+better; that comparison hasn't been tested here.
 
-- Point `endpoint` at your own backend proxy (never call `api.anthropic.com` directly
-  from the browser with an exposed key — even for local use, route it through a small
-  Express/Nest endpoint or a serverless function that holds the key server-side).
-- Send the same `SYSTEM_PROMPT` and user query in Anthropic's `messages` format.
-- Parse `response.content` (an array of content blocks) instead of `response.message.content`.
+## Using a hosted model instead
 
-The `SearchFilter` contract and everything downstream of it (`ProductFilterService`,
-the component) stays identical — only the transport to the model changes.
+All model calls live in `src/app/core/services/query-parser.service.ts`. To use a
+hosted API, replace the request in `parseHardConstraints` and `findSemanticMatches`
+with a call to your own backend endpoint that forwards to the provider. Don't call
+a provider directly from the browser with an API key. The prompts and response
+shapes stay the same. This swap is untested.
 
 ## Troubleshooting
 
-- **"Could not understand that search"** — check that `ollama serve` is running
-  (`curl http://localhost:11434` should respond) and that you've pulled the model
-  referenced in `query-parser.service.ts` (`llama3.2` by default).
-- **Malformed JSON from the model** — smaller/quantized models occasionally drift
-  from the requested schema. Try a larger model (`llama3.1:8b` or similar) if you
-  see frequent parse failures.
-- **CORS errors** — make sure you're running `npm start` (which applies the proxy
-  config), not `ng serve` directly.
+- **404 on `/ollama/api/chat`:** you're not running `npm start`, or the proxy key in
+  `proxy.conf.json` isn't `"/ollama"`.
+- **"Could not understand that search":** check that Ollama is running
+  (`curl http://localhost:11434`) and that `ollama list` shows `qwen2.5:7b`.
+- **Odd or inconsistent results:** small models are imperfect. Check the Stage 1 and
+  Stage 2 panels to see which step went wrong.

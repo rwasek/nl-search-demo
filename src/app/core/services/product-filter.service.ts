@@ -1,23 +1,25 @@
 import { Injectable } from '@angular/core';
 import { Product } from '../models/product.model';
-import { SearchFilter } from '../models/search-filter.model';
+import { HardConstraints } from '../models/hard-constraints.model';
 
 @Injectable({ providedIn: 'root' })
 export class ProductFilterService {
-  apply(products: Product[], filter: SearchFilter): Product[] {
-    return products.filter(product => {
-      if (filter.category && product.category !== filter.category) return false;
-      if (filter.maxPrice !== null && product.price > filter.maxPrice) return false;
-      if (filter.minPrice !== null && product.price < filter.minPrice) return false;
-      if (filter.inStock !== null && product.inStock !== filter.inStock) return false;
-
-      if (filter.keywords.length) {
-        const haystack = `${product.name} ${product.description}`.toLowerCase();
-        const hasMatch = filter.keywords.some(kw => haystack.includes(kw.toLowerCase()));
-        if (!hasMatch) return false;
-      }
-
+  /**
+   * Deterministic filtering only — no AI involved, and no category here
+   * on purpose (see QueryParserService comments). Price and stock are the
+   * only constraints with one unambiguous right answer.
+   */
+  applyHardConstraints(catalog: Product[], constraints: HardConstraints): Product[] {
+    return catalog.filter(product => {
+      if (constraints.maxPrice !== null && product.price > constraints.maxPrice) return false;
+      if (constraints.minPrice !== null && product.price < constraints.minPrice) return false;
+      if (constraints.inStock !== null && product.inStock !== constraints.inStock) return false;
       return true;
     });
+  }
+
+  selectByIds(candidates: Product[], matchingIds: string[]): Product[] {
+    const idSet = new Set(matchingIds);
+    return candidates.filter(product => idSet.has(product.id));
   }
 }

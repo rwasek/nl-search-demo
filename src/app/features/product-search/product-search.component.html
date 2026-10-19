@@ -1,14 +1,14 @@
 <div class="page">
   <h1>Natural Language Product Search</h1>
   <p class="subtitle">
-    Try: "show me electronics under $50 that are in stock" or "apparel over $100"
+    Try: "workout gear under $80" or "something to listen to music with"
   </p>
 
   <div class="search-bar">
     <input
       [(ngModel)]="queryText"
       (keydown.enter)="search()"
-      placeholder="Type a search in plain English…"
+      placeholder="Describe what you're looking for…"
       [disabled]="loading()"
     />
     <button (click)="search()" [disabled]="loading()">
@@ -21,12 +21,23 @@
     <p class="error">{{ error() }}</p>
   }
 
-  @if (lastFilter()) {
+  @if (lastConstraints()) {
     <details class="parsed-filter">
-      <summary>Parsed filter (what the model returned)</summary>
-      <pre>{{ lastFilter() | json }}</pre>
+      <summary>Stage 1 — hard constraints (applied in code, not by the model)</summary>
+      <pre>{{ lastConstraints() | json }}</pre>
     </details>
   }
+
+@if (lastMatchingIds()) {
+  <details class="parsed-filter">
+    <summary>Stage 2 — products the model judged a fit</summary>
+    <ul>
+      @for (product of results(); track product.id) {
+        <li>{{ product.id }} — {{ product.name }}</li>
+      }
+    </ul>
+  </details>
+}
 
   <p class="result-count">{{ results().length }} result(s)</p>
 
